@@ -761,6 +761,7 @@ def _get_or_create_env(task_id: str):
         if env_type == "local":
             local_config = {
                 "persistent": config.get("local_persistent", False),
+                "shell": config.get("shell", "auto"),
             }
 
         logger.info("Creating new %s environment for execute_code task %s...",
