@@ -3108,6 +3108,15 @@ DEFAULT_CONFIG = {
         "profile_build": "ask",
     },
 
+    # ``hermes backup`` (run-backup) pruning.
+    "backup": {
+        # Number of hermes-backup-*.zip files to keep in the output directory
+        # after each ``hermes backup`` run.  Older zips are deleted automatically.
+        # Values below 1 are floored to 1 (the backup just created is always
+        # preserved).  Override per-run with ``hermes backup --keep N``.
+        "run_backup_keep": 3,
+    },
+
     # ``hermes update`` behaviour.
     "updates": {
         # Pre-update safety backup — ONE consolidated mechanism, three modes:
@@ -5413,7 +5422,7 @@ _KNOWN_ROOT_KEYS = {
     "fallback_providers", "credential_pool_strategies", "toolsets",
     "agent", "terminal", "display", "compression", "delegation",
     "auxiliary", "moa", "custom_providers", "context", "memory", "gateway",
-    "sessions", "streaming", "updates", "mcp_servers",
+    "sessions", "streaming", "updates", "mcp_servers", "backup",
 }
 
 # Valid fields inside a custom_providers list entry
