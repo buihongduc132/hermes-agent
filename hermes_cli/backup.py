@@ -394,14 +394,15 @@ def run_backup(args) -> None:
                         suffix=".db", delete=False, dir=str(out_path.parent)
                     ) as tmp:
                         tmp_db = Path(tmp.name)
-                    if _safe_copy_db(abs_path, tmp_db):
-                        zf.write(tmp_db, arcname=str(rel_path))
-                        total_bytes += tmp_db.stat().st_size
+                    try:
+                        if _safe_copy_db(abs_path, tmp_db):
+                            zf.write(tmp_db, arcname=str(rel_path))
+                            total_bytes += tmp_db.stat().st_size
+                        else:
+                            errors.append(f"  {rel_path}: SQLite safe copy failed")
+                            continue
+                    finally:
                         tmp_db.unlink(missing_ok=True)
-                    else:
-                        tmp_db.unlink(missing_ok=True)
-                        errors.append(f"  {rel_path}: SQLite safe copy failed")
-                        continue
                 else:
                     zf.write(abs_path, arcname=str(rel_path))
                     total_bytes += abs_path.stat().st_size
