@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [code-review, cleanup, refactor, delegation, subagent, parallel, simplify]
-    related_skills: [test-driven-development, plan, runtime-debugging]
+    related_skills: [requesting-code-review, test-driven-development, plan]
 ---
 
 # Simplify Code — Parallel Review & Cleanup
@@ -210,39 +210,3 @@ If your install has the `subagent-driven-development` skill (optional), it
 covers the complementary case: parallel review *during* implementation, per
 task. This skill is the standalone *after-the-fact* cleanup pass. Use
 `requesting-code-review` for the pre-commit security/quality gate.
-
-## Single-Reviewer Dispatch (Pre-merge Gate)
-
-When you need a quick pre-merge or pre-PR review (lighter than the 3-reviewer
-parallel process above), dispatch a single code-reviewer subagent with precisely
-crafted context. This is the pattern formerly captured by `requesting-code-review`.
-
-### When to use single-reviewer vs 3-reviewer
-
-| Pattern | When |
-|---------|------|
-| **3-reviewer parallel** (this skill) | After completing work, before commit. Deep multi-angle cleanup. |
-| **Single-reviewer dispatch** | Pre-merge gate, after each task in subagent-driven dev, when stuck. |
-
-### Dispatch steps
-
-1. Get git SHAs:
-```bash
-BASE_SHA=$(git rev-parse HEAD~1)  # or origin/main
-HEAD_SHA=$(git rev-parse HEAD)
-```
-
-2. Dispatch code-reviewer subagent using the template at
-   `templates/code-reviewer-dispatch.md`. Fill placeholders:
-   - `{WHAT_WAS_IMPLEMENTED}` - What you just built
-   - `{PLAN_OR_REQUIREMENTS}` - What it should do
-   - `{BASE_SHA}` / `{HEAD_SHA}` - commit range
-   - `{DESCRIPTION}` - Brief summary
-
-3. Act on feedback:
-   - Fix **Critical** issues immediately
-   - Fix **Important** issues before proceeding
-   - Note **Minor** issues for later
-   - Push back if reviewer is wrong (with technical reasoning)
-
-**Never** skip review because "it is simple". **Never** ignore Critical issues.

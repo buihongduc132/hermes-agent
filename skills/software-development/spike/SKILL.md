@@ -1,6 +1,6 @@
 ---
 name: spike
-description: "Throwaway experiments to validate an idea before build."
+description: "Throwaway experiments and design sketches to validate ideas before committing to a build. Covers feasibility spikes (decompose -> research -> build -> verdict) and UI/UX design sketches (2-3 variant mockups to compare directions)."
 version: 1.0.0
 author: Hermes Agent (adapted from gsd-build/get-shit-done)
 license: MIT
@@ -8,7 +8,7 @@ platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [spike, prototype, experiment, feasibility, throwaway, exploration, research, planning, mvp, proof-of-concept]
-    related_skills: [sketch, subagent-driven-development, plan]
+    related_skills: [subagent-driven-development, plan, claude-design]
 ---
 
 # Spike
@@ -195,3 +195,76 @@ Propose 2-4 candidates as Given/When/Then. Let the user pick.
 ## Attribution
 
 Adapted from the GSD (Get Shit Done) project's `/gsd-spike` workflow — MIT © 2025 Lex Christopherson ([gsd-build/get-shit-done](https://github.com/gsd-build/get-shit-done)). The full GSD system offers persistent spike state, MANIFEST tracking, and integration with a broader spec-driven development pipeline; install with `npx get-shit-done-cc --hermes --global`.
+
+## Design Sketches (UI/UX Variant Exploration)
+
+A specialized form of spike for **visual design exploration**. Instead of
+validating technical feasibility, you generate 2-3 throwaway HTML mockup
+variants so the user can compare design directions side-by-side before
+committing to a build.
+
+Load this pattern when the user says: "sketch this screen", "show me what X
+could look like", "compare layout A vs B", "give me 2-3 takes on this UI",
+"mockup this before I build".
+
+### When to sketch vs spike
+
+| Pattern | Output | Question answered |
+|---------|--------|-------------------|
+| **Feasibility spike** (above) | Working code prototype | "Is X technically possible? Which approach works?" |
+| **Design sketch** (below) | 2-3 HTML mockup variants | "What should X look like? Which visual direction?" |
+
+### Method
+
+```
+intake  ->  variants (2-3)  ->  head-to-head comparison  ->  pick winner
+```
+
+1. **Intake** — get three things (one question at a time):
+   - **Feel**: adjectives, emotions, a vibe ("calm, editorial, like Linear")
+   - **References**: apps/sites/products that capture the feel
+   - **Core action**: the single most important thing a user does on this screen
+
+2. **Variants** — produce 2-3 complete standalone HTML files. Each takes a
+   **different design stance** (not different pixel values). Good variant axes:
+   - Density: compact / airy / ultra-dense
+   - Emphasis: content-first / action-first / tool-first
+   - Aesthetic: editorial / utilitarian / playful
+   - Layout: single-column / sidebar / split-pane
+
+   Two variants that differ only in accent color are wasted effort.
+
+3. **Make them real HTML** — single self-contained file each:
+   - Inline `<style>`, system fonts or one Google Font
+   - Tailwind via CDN is fine
+   - Realistic fake content, not "Lorem ipsum"
+   - Interactive: links clickable, hovers real, at least one state transition
+   - **Verify visually** with `browser_navigate` + `browser_vision`
+
+4. **Head-to-head** — present a comparison table, opinionate:
+   ```markdown
+   | Dimension | Calm editorial | Utilitarian dense | Playful split |
+   |-----------|----------------|-------------------|---------------|
+   | Density   | Low            | High              | Medium        |
+   | Feel      | Calm, trusted  | Sharp, tool-like  | Inviting      |
+   ```
+
+5. Let user pick a winner, combine two into a hybrid, or iterate.
+
+### Sketch output structure
+
+```
+sketches/
++-- 001-calm-editorial/
+|   +-- index.html
+|   +-- README.md
++-- 001-utilitarian-dense/
+|   +-- index.html
+|   +-- README.md
++-- 001-playful-split/
+    +-- index.html
+    +-- README.md
+```
+
+For production design artifacts (landing pages, decks), use `claude-design`
+instead. Sketches are throwaway comparison tools.
