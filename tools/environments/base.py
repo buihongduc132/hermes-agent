@@ -633,9 +633,14 @@ class BaseEnvironment(ABC):
         self._snapshot_ready = False
         self._snapshot_passthrough_names: set[str] = set()
         # When True, login bash is unusable (e.g. broken Git-for-Windows
-        # ``Directory \\drivers\\etc`` startup) so execute() must not fall
+        # ``Directory \drivers\etc`` startup) so execute() must not fall
         # back to ``bash -l`` per command — use non-login ``bash -c`` instead.
         self._prefer_nonlogin = False
+        # Subclasses (LocalEnvironment) override this to "zsh" when the
+        # terminal shell is zsh-family.  The snapshot bootstrap uses it to
+        # pick zsh-compatible commands (alias -L / setopt / functions vs
+        # alias -p / shopt / declare -F).
+        self._shell_kind = "bash"
 
     # ------------------------------------------------------------------
     # Abstract methods
@@ -740,33 +745,60 @@ class BaseEnvironment(ABC):
         # but macOS ships bash 3.2 which does NOT provide it — the name expands
         # empty there, so every writer shares one temp path and the race is
         # back.  ``mktemp`` allocates a per-writer unique path portably across
-        # bash versions.  The template is shell-quoted (Windows/Git-Bash drive
-        # letters, spaces) and the resulting path lives in a shell variable so
-        # every later expansion is consistent.
+        # bash versions (and works in zsh too).  The template is shell-quoted
+        # (Windows/Git-Bash drive letters, spaces) and the resulting path lives
+        # in a shell variable so every later expansion is consistent.
         _snap_tmp_template = self._quote_shell_path(self._snapshot_path + ".tmp.XXXXXXXXXX")
         _snap_tmp = '"$__hermes_snap_tmp"'
         snapshot_excluded = self._snapshot_excluded_passthrough_names()
+        # Shell-aware bootstrap: zsh uses different commands than bash for the
+        # environment/function/alias dump (functions vs declare -F, alias -L
+        # vs alias -p, setopt vs shopt).  Using the wrong commands crashes the
+        # snapshot shell with exit 1.  The profile-scoped session-var exclusion
+        # (``_export_dump_excluding_session_vars``) is bash syntax, so the zsh
+        # branch uses a plain ``export -p``.
+        _is_zsh = getattr(self, "_shell_kind", "bash") == "zsh"
         bootstrap = (
             f"umask 077\n"
             f"__hermes_snap_tmp=$(mktemp {_snap_tmp_template}) || exit 1\n"
-            f"{_export_dump_excluding_session_vars(_snap_tmp, snapshot_excluded)}\n"
-            # Dump function definitions, filtering out private (``_``-prefixed)
-            # helpers — mainly bash-completion internals (``_git``, ``_make``…)
-            # — by NAME, not by line.  A naive ``declare -f | grep -vE '^_[^_]'``
-            # is line-based: it strips the function *header* line but leaves the
-            # orphaned ``{ … }`` body behind, which corrupts the snapshot and
-            # makes every sourced command fail (e.g. exit 127).  Selecting the
-            # wanted names with ``declare -F`` first, then dumping only those
-            # whole definitions, preserves the filter's intent without ever
-            # tearing a function body.  The non-empty guard matters: bare
-            # ``declare -f`` with no name args dumps ALL functions, so an empty
-            # name list (only private funcs present) would otherwise leak the
-            # very functions we meant to drop.
-            f"__hermes_fns=$(declare -F | awk '{{print $3}}' | grep -vE '^_[^_]') || true\n"
-            f"[ -n \"$__hermes_fns\" ] && declare -f $__hermes_fns "
-            f">> {_snap_tmp} 2>/dev/null || true\n"
-            f"alias -p >> {_snap_tmp}\n"
-            f"echo 'shopt -s expand_aliases' >> {_snap_tmp}\n"
+        )
+        if _is_zsh:
+            # zsh: ``functions`` lists function definitions; ``alias -L``
+            # dumps aliases in restorable form; ``setopt interactive_comments``
+            # replaces bash's ``shopt -s expand_aliases``.  A plain
+            # ``export -p`` is used because the session-var exclusion helper
+            # relies on bash-specific name-prefix expansion (``${!PREFIX*}``).
+            # zsh does NOT word-split unquoted variables by default
+            # (unlike bash). ``functions $__hermes_fns`` passes the
+            # entire multi-line string as one arg → silent no-op.
+            # Use ${(f)...} to split on newlines and iterate.
+            bootstrap += (
+                f"export -p > {_snap_tmp}\n"
+                f"__hermes_fns=$(functions 2>/dev/null | "
+                f"grep -E '^[a-zA-Z_][a-zA-Z0-9_]* \\(\\) \\{{' | "
+                f"awk '{{print $1}}' | grep -vE '^_[^_]') || true\n"
+                f"for __fn in \"${{(f)__hermes_fns}}\"; do "
+                f"functions \"$__fn\"; done >> {_snap_tmp} 2>/dev/null || true\n"
+                f"alias -L >> {_snap_tmp} 2>/dev/null || true\n"
+                f"echo 'setopt interactive_comments' >> {_snap_tmp}\n"
+            )
+        else:
+            # bash: ``declare -F`` lists function names by name, ``declare -f``
+            # dumps bodies, ``alias -p`` dumps aliases, ``shopt`` enables alias
+            # expansion.  Filter private (``_``-prefixed) helpers by NAME, not
+            # by line — a line-based grep strips the header but leaves the
+            # orphaned ``{ … }`` body behind, corrupting the snapshot.  The
+            # environment dump excludes per-session bridged vars (issue #71296)
+            # via ``_export_dump_excluding_session_vars``.
+            bootstrap += (
+                f"{_export_dump_excluding_session_vars(_snap_tmp, snapshot_excluded)}\n"
+                f"__hermes_fns=$(declare -F | awk '{{print $3}}' | grep -vE '^_[^_]') || true\n"
+                f"[ -n \"$__hermes_fns\" ] && declare -f $__hermes_fns "
+                f">> {_snap_tmp} 2>/dev/null || true\n"
+                f"alias -p >> {_snap_tmp}\n"
+                f"echo 'shopt -s expand_aliases' >> {_snap_tmp}\n"
+            )
+        bootstrap += (
             f"echo 'set +e' >> {_snap_tmp}\n"
             f"echo 'set +u' >> {_snap_tmp}\n"
             # Publish atomically only if assembly succeeded; otherwise drop the

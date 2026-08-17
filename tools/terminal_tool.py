@@ -1657,6 +1657,7 @@ def _get_env_config() -> Dict[str, Any]:
         "host_cwd": host_cwd,
         "docker_mount_cwd_to_workspace": mount_docker_cwd,
         "timeout": _parse_env_var("TERMINAL_TIMEOUT", "180"),
+        "shell": os.getenv("TERMINAL_SHELL", "auto"),
         "lifetime_seconds": _parse_env_var("TERMINAL_LIFETIME_SECONDS", "300"),
         # SSH-specific config
         "ssh_host": os.getenv("TERMINAL_SSH_HOST", ""),
@@ -1776,6 +1777,7 @@ def _create_environment(env_type: str, image: str, cwd: str, timeout: int,
         Environment instance with execute() method
     """
     cc = container_config or {}
+    lc = local_config or {}
     cpu = cc.get("container_cpu", 1)
     memory = cc.get("container_memory", 5120)
     disk = cc.get("container_disk", 51200)
@@ -1787,7 +1789,14 @@ def _create_environment(env_type: str, image: str, cwd: str, timeout: int,
     docker_network = cc.get("docker_network", True)
 
     if env_type == "local":
-        return _LocalEnvironment(cwd=cwd, timeout=timeout)
+        # Shell selection is a LOCAL-backend concern only. The three callers
+        # (terminal_tool / code_execution_tool / file_tools) populate
+        # local_config["shell"] from terminal.shell; container_config is the
+        # docker/modal resource dict and must NOT leak shell into local.
+        # Reading an unbound alias here previously raised NameError, crashing
+        # every local terminal invocation ("Terminal tool is broken").
+        return _LocalEnvironment(
+            cwd=cwd, timeout=timeout, shell=lc.get("shell", "auto"))
     
     elif env_type == "docker":
         # One-shot orphan reaper: clean up labeled containers left behind by
@@ -2807,6 +2816,7 @@ def terminal_tool(
                         if env_type == "local":
                             local_config = {
                                 "persistent": config.get("local_persistent", False),
+                                "shell": config.get("shell", "auto"),
                             }
 
                         new_env = _create_environment(
